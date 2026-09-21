@@ -19,8 +19,9 @@ def data_normalize(raw_data):
     # TODO 1: implement this method.
     # Hint: use the scale() helper above to scale raw_data into [0, 1],
     # and raw_data.max(axis=0) for max_values.
-    norm_data = None
-    max_values = None
+
+    norm_data = scale(raw_data, raw_data.min(), raw_data.max())
+    max_values = raw_data.max(axis=0)
     return norm_data, max_values
 
 def data_normalize_prediction(raw_data, max_values):
@@ -32,7 +33,7 @@ def sigmoid(Z):
 
 def relu(Z):
     # TODO 2: implement relu function.
-    return None
+    return np.max(0,Z)
 
 def single_layer_forward_propagation(A_prev, W_curr, b_curr, activation="relu"):
     """Perform single layer forward propagation.
@@ -49,7 +50,7 @@ def single_layer_forward_propagation(A_prev, W_curr, b_curr, activation="relu"):
     """
     # TODO 3: implement this function.
     # calculation of the input value for the activation function
-    Z_curr = None
+    Z_curr = (A_prev*W_curr) + b_curr
 
     # selection of activation function
     if activation == "relu":
@@ -60,7 +61,7 @@ def single_layer_forward_propagation(A_prev, W_curr, b_curr, activation="relu"):
         raise Exception('Non-supported activation function')
 
     # return of calculated activation A and the intermediate Z matrix
-    A_curr = None
+    A_curr = activation_func(Z_curr)
     return A_curr, Z_curr
 
 def full_forward_propagation(X, params_values):
@@ -79,10 +80,10 @@ def full_forward_propagation(X, params_values):
     # TODO 4: implement this method.
     # Call single_layer_forward_propagation() three times (relu, relu, sigmoid)
     # and store every intermediate A/Z so backprop can use them later.
-
-    A1, Z1 = None, None
-    A2, Z2 = None, None
-    A3, Z3 = None, None
+    #params = {"W1": W1, "b1": b1, "W2": W2, "b2": b2, "W3": W3, "b3": b3}
+    A1, Z1 = single_layer_forward_propagation(X, params_values["W1"], params_values["b1"], activation="relu")
+    A2, Z2 = single_layer_forward_propagation(A1, params_values["W2"], params_values["b2"], activation="relu")
+    A3, Z3 = single_layer_forward_propagation(A2, params_values["W3"], params_values["b3"], activation="relu")
 
     memory = {"A1": A1, "Z1": Z1, "A2": A2, "Z2": Z2, "A3": A3, "Z3": Z3}
     return A3, memory
@@ -105,7 +106,12 @@ def sigmoid_backward(dA, Z):
 
 def relu_backward(dA, Z):
     # TODO 5: Implement derivative of relu function
-    dZ = None
+    # Copy dA to preserve its shape and values where Z > 0
+    dZ = np.array(dA, copy=True)
+
+    # When Z <= 0, the derivative of ReLU is 0, so dZ should be 0
+    dZ[Z <= 0] = 0
+
     return dZ
 
 def single_layer_backward_propagation(dA_curr, W_curr, b_curr, Z_curr, A_prev, activation="relu"):
@@ -137,13 +143,13 @@ def single_layer_backward_propagation(dA_curr, W_curr, b_curr, Z_curr, A_prev, a
         raise Exception('Non-supported activation function')
 
     # calculation of the activation function derivative
-    dZ_curr = None
+    dZ_curr = backward_activation_func(dA_curr, Z_curr)
     # derivative of the matrix W
-    dW_curr = None
+    dW_curr = backward_activation_func(dA_curr, W_curr)
     # derivative of the vector b
-    db_curr = None
+    db_curr = backward_activation_func(dA_curr, b_curr)
     # derivative of the matrix A_prev
-    dA_prev = None
+    dA_prev = backward_activation_func(dA_curr, A_prev)
     return dA_prev, dW_curr, db_curr
 
 
@@ -161,10 +167,14 @@ def confusion_matrix(y_true, y_pred):
     y_true = y_true.flatten().astype(int)
     y_pred = y_pred.flatten().astype(int)
 
-    tp = None
-    tn = None
-    fp = None
-    fn = None
+    y_true_bool = y_true.reshape(-1) == 1
+    y_pred_bool = y_pred.reshape(-1) == 1
+
+    tp = np.sum(y_true_bool & y_pred_bool)  # True Positive:  Actual = 1, Predicted = 1
+    fp = np.sum(~y_true_bool & y_pred_bool)  # False Positive: Actual = 0, Predicted = 1
+    tn = np.sum(~y_true_bool & ~y_pred_bool)  # True Negative:  Actual = 0, Predicted = 0
+    fn = np.sum(y_true_bool & ~y_pred_bool)  # False Negative: Actual = 1, Predicted = 0
+
     return {"tp": tp, "fp": fp, "tn": tn, "fn": fn}
 
 
@@ -187,10 +197,10 @@ def compute_metrics(y_true, y_pred):
     cm = confusion_matrix(y_true, y_pred)
     tp, fp, tn, fn = cm["tp"], cm["fp"], cm["tn"], cm["fn"]
 
-    accuracy = None
-    precision = None
-    recall = None
-    f1 = None
+    accuracy = (tp+tn) / (tp+tn+fp+fn)
+    precision = (tp) / (tp + fn)
+    recall = (tp) / (tp + fn)
+    f1 = 2 * ((precision * recall) / (precision + recall))
 
     return {
         "accuracy": accuracy,
